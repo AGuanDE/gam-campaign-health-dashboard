@@ -35,6 +35,26 @@ The marketing agency must deliver contracted impression targets to multiple adve
    streamlit run streamlit_app.py
    ```
 
+## Streamlit Dashboard
+
+- **Filters and ingestion**: Sidebar filters by advertiser, pacing status, delivery status, and schedule dates; one-click ingestion runs the latest `gam_report_*.csv` into Postgres.  
+  ![Sidebar Filters](docs/images/dashboard-filters.png)
+
+- **Advertiser view**: Portfolio KPIs (behind/on-track/ahead/urgent), impressions vs goal by advertiser, and order pacing bars with goal markers; drill into line-item diagnostics for any order.  
+  ![Advertiser delivery view](docs/images/dashboard-advertiser.png)
+  ![Advertiser pacing view](docs/images/dashboard-advertiser-pace.png)
+  ![Advertiser details view](docs/images/dashboard-advertiser-details.png)
+
+- **Club portfolio view**: Club health overview with pacing mix vs delivery scale toggle, optional urgent-only filter, bottom-5/top-3 pacing spotlight, and order share of club delivery to spot concentration risk.  
+  ![Club Portfolio view](docs/images/dashboard-club-overview.png)
+  ![Club Portfolio spotlight and details](docs/images/dashboard-club-spotlight-details.png)
+
+- **Creative sizes view**: Share of impressions by rendered creative size with optional order/line-item/device filters, plus goal context when a single order is selected.  
+  ![Creative size view](docs/images/dashboard-creative-details.png)
+
+- **Goals tab**: In-app editor for `seed_partner_names_goals.csv`, then runs `dbt seed` and `dbt run` to refresh goals and marts.  
+  ![Goals tab](docs/images/dashboard-goals.png)
+
 ## Data Flow
 
 1. Download GAM CSVs (e.g., `gam_report_*.csv`) into `data/`.
@@ -49,5 +69,5 @@ The marketing agency must deliver contracted impression targets to multiple adve
 ## Notes
 
 - Default dbt profile: adjust `~/.dbt/profiles.yml` (or set `DBT_PROFILES_DIR`) to point at your Postgres host and default target.
-- Seed files in map domains to clubs and store partner goals; update and run `dbt seed` when these change.
+- Seed files map domains to clubs and store partner goals; update and run `dbt seed` when these change.
 - The Creative Sizes tab includes order-level goal/delivery context and selection-level scale metrics (line item counts/averages) to understand whether sizes perform due to efficiency or volume.
