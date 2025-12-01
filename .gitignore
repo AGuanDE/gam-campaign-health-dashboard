@@ -1,0 +1,33 @@
+# Python venv
+.venv/
+__pycache__/
+*.py[cod]
+
+# Environment / secrets
+.env
+.streamlit/
+secrets/
+
+# Docker data / volumes (adjust names if different)
+postgres_data/
+pgadmin_data/
+
+# dbt artifacts (optional, but often ignored)
+target/
+dbt_packages/
+dbt/logs/
+
+# Editor / OS junk
+.vscode/
+.idea/
+.DS_Store
+
+# 1. Jupyter/IPython Notebook Files
+*.ipynb
+.ipynb_checkpoints/
+
+# 2. Windows Metadata
+# Ignore Zone Identifiers (NTFS Alternate Data Streams) often created when downloading files
+*:Zone.Identifier
+
+dbt/logs/dbt.log

@@ -1,0 +1,63 @@
+version: 2
+
+seeds:
+  # ============================================================
+  # Trusted goals by partner / order
+  # ============================================================
+  - name: seed_partner_names_goals
+    description: >
+      Trusted goals table keyed by GAM order_name and advertiser_name.
+      Used to override/replace impression goals coming from GAM reports.
+    columns:
+      - name: order_name
+        description: "Human-readable order / campaign name from GAM."
+        tests:
+          - not_null
+
+      - name: advertiser_name
+        description: "Advertiser / partner name as it appears in GAM's ADVERTISER_NAME."
+        tests:
+          - not_null
+
+      - name: impression_goal
+        description: >
+          Target impression goal for this advertiser+order combination.
+          May be NULL when not yet defined or intentionally unset.
+
+  # ============================================================
+  # Domain → club mapping (for Sports league + clubs)
+  # ============================================================
+  - name: seed_domain_names
+    description: >
+      Mapping from top private domain to canonical club identifiers and
+      human-readable display names for Sports league clubs.
+    columns:
+      - name: domain_name
+        description: >
+          Top private domain used to map traffic to a specific Sports league club
+          (for example: sportsleague.ca, teamrabbit.com, teamlion.com).
+        tests:
+          - not_null
+          - unique
+
+      - name: club_name
+        description: >
+          Canonical, code-friendly club identifier used in the warehouse
+          and dbt models (for example: sportsleague, teamrabbit, teamlion).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - sportsleague
+                  - teamrabbit
+                  - teamlion
+                  - teameagle
+                  - teamgiants
+                  - teambuffalo
+                  - teamdolphins
+
+      - name: club_display_name
+        description: "Human-readable club display name for dashboards and reports."
+        tests:
+          - not_null

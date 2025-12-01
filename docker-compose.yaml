@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    container_name: marketing_ads-postgres-1
+    env_file:
+      - .env
+    ports:
+      - "5542:5432"          # avoid clashing with existing postgres
+    volumes:
+      - marketing_postgres_data:/var/lib/postgresql/data
+      - ./data:/data:ro
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: marketing_ads-pgadmin-1
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "5051:80"            # avoid clashing with existing pgAdmin
+    depends_on:
+      - postgres
+    volumes:
+      - marketing_pgadmin_data:/var/lib/pgadmin
+
+  dbt:
+    build:
+      context: ./dbt
+      dockerfile: Dockerfile
+    container_name: marketing_ads-dbt-1
+    restart: "no"
+    env_file:
+      - .env
+    ports:
+      - "8081:8080"          # avoid clashing with any existing dbt docs/dev server
+    volumes:
+      # Mount your dbt project (dbt_project.yml + marketing_dbt/*)
+      - ./dbt:/usr/app
+      # Mount host profiles (~/.dbt) into root's home in the container
+      - /home/aguan/.dbt:/root/.dbt
+    working_dir: /usr/app
+    depends_on:
+      - postgres
+    # Keep this running so you can exec into it and run dbt commands interactively
+    command: ["tail", "-f", "/dev/null"]
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    volumes:
+      - .:/app               # persist seed edits and dbt artifacts
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      DBT_TARGET: dev        # use the docker-network profile target
+      DBT_PARTIAL_PARSE: "0"
+      DBT_TARGET_PATH: /app/dbt/target
+    depends_on:
+      - postgres
+    networks:
+      - default              # same as postgres (adjust if you use a named network)
+    ports:
+      - "8502:8501"          # avoid clashing with existing Streamlit
+
+
+volumes:
+  marketing_postgres_data:
+  marketing_pgadmin_data:

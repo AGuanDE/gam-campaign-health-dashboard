@@ -1,0 +1,794 @@
+version: 2
+
+models:
+  # ============================================================
+  # FACT: ORDER HEALTH
+  # ============================================================
+  - name: fct_gam_order_health
+    description: >
+      Order-grain fact table for Google Ad Manager.
+      Aggregates delivery to the order level, applies seed-based
+      impression goals, and computes pacing / health metrics.
+    tags: ['gam', 'order', 'health']
+
+    columns:
+      - name: order_id
+        description: "Primary identifier for the order (from GAM ORDER_ID)."
+        tests:
+          - not_null
+          - unique
+
+      - name: order_name
+        description: "Human-readable name of the order (campaign)."
+        tests:
+          - not_null
+
+      - name: advertiser_name
+        description: "Advertiser or partner name as reported by GAM."
+        tests:
+          - not_null
+
+      - name: order_delivery_status_name
+        description: "Order-level delivery status from GAM (e.g. Delivering, Paused, Completed)."
+
+      - name: schedule_start_date
+        description: "Effective schedule start date for the order."
+
+      - name: schedule_end_date
+        description: "Effective schedule end date for the order."
+
+      - name: schedule_start_datetime
+        description: "Effective schedule start timestamp for the order."
+
+      - name: schedule_end_datetime
+        description: "Effective schedule end timestamp for the order."
+
+      - name: reported_impressions
+        description: "Snapshot/report impressions in the extraction window."
+        tests:
+          - not_null
+
+      - name: reported_clicks
+        description: "Snapshot/report clicks in the extraction window."
+
+      - name: reported_ctr
+        description: "Snapshot/report CTR in the extraction window."
+
+      - name: impression_goal
+        description: >
+          Final order-level impression goal derived from trusted seeds where available.
+
+      - name: schedule_days
+        description: "Total scheduled days for the order (inclusive)."
+
+      - name: days_elapsed
+        description: "Days elapsed in the schedule window as of current_date."
+
+      - name: schedule_pct_elapsed
+        description: "Fraction of schedule elapsed (0–1)."
+
+      - name: delivered_impressions_pct_of_goal
+        description: "Fraction of impression_goal delivered (0–1)."
+
+      - name: actual_impressions_per_day
+        description: "Average impressions per day based on delivered_impressions and schedule_days."
+
+      - name: target_impressions_per_day
+        description: "Impressions per day implied by impression_goal and schedule_days."
+
+      - name: pacing_index
+        description: >
+          Pacing index at the order level:
+          (delivered_impressions_pct_of_goal / schedule_pct_elapsed).
+          1.0 = on pace, >1 ahead, <1 behind.
+
+  # ============================================================
+  # FACT: LINE ITEM HEALTH
+  # ============================================================
+  # ============================================================
+  # FACT: CLUB DELIVERY
+  # ============================================================
+  - name: fct_gam_club_delivery
+    description: >
+      Club-grain fact table built from GAM domain mapping.
+      One row per (club_name, order_id), showing how much of each
+      order's delivery is flowing through each club and how much
+      each order contributes to the club's total impressions.
+      Uses fct_gam_order_health for global goals and pacing context.
+    tags: ['gam', 'club', 'health']
+
+    columns:
+      - name: club_name
+        description: "Short identifier for the club/site (e.g. 'teamrabbit')."
+
+      - name: club_display_name
+        description: "Human-readable display name for the club/site."
+
+      - name: order_id
+        description: "Parent order serving impressions on this club."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_gam_order_health')
+                field: order_id
+
+      - name: order_name
+        description: "Order name (campaign) for this club."
+
+      - name: advertiser_name
+        description: "Advertiser / partner name."
+
+      - name: order_delivery_status_name
+        description: "Order-level delivery status from fct_gam_order_health."
+
+      - name: schedule_start_date
+        description: "Order schedule start date."
+
+      - name: schedule_end_date
+        description: "Order schedule end date."
+
+      - name: schedule_start_datetime
+        description: "Order schedule start timestamp."
+
+      - name: schedule_end_datetime
+        description: "Order schedule end timestamp."
+
+      - name: schedule_days
+        description: "Total scheduled days for the order."
+
+      - name: days_elapsed
+        description: "Days elapsed in the order schedule window as of current_date."
+
+      - name: schedule_pct_elapsed
+        description: "Fraction of the order schedule elapsed (0–1)."
+
+      - name: order_pacing_index
+        description: >
+          Global order pacing index from fct_gam_order_health.
+          1.0 = on pace, >1 ahead, <1 behind.
+
+      - name: club_delivered_impressions
+        description: "Impressions from this order that were served on this club."
+        tests:
+          - not_null
+
+      - name: order_reported_impressions
+        description: "Total delivered impressions for the order across all clubs/domains."
+
+      - name: order_reported_clicks
+        description: "Total delivered clicks for the order across all clubs/domains."
+
+      - name: impression_goal
+        description: "Final order-level impression goal."
+
+      - name: club_share_of_order_delivery
+        description: >
+          Fraction of the order's delivered impressions that were
+          served on this club (0–1).
+
+      - name: order_share_of_club_delivery
+        description: >
+          Fraction of the club's total impressions that came from
+          this order (0–1).
+
+      - name: distinct_line_items_on_club
+        description: "Number of distinct line items from this order that delivered on this club."
+
+  # ============================================================
+  # FACT: LINE ITEM DIAGNOSTICS
+  # ============================================================
+  - name: fct_gam_line_item_diagnostics
+    description: >
+      Diagnostics fact table at the (order_id, line_item_id, domain_name) grain.
+      Enriches each domain-level row with line-item attributes and club mapping,
+      plus order-level pacing context. Designed for root-cause analysis of
+      underperforming orders and line items by domain/club, device, size, and more.
+    tags: ['gam', 'line_item', 'diagnostics']
+
+    columns:
+      - name: order_id
+        description: "Parent order identifier for this line item + domain row."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_gam_order_health')
+                field: order_id
+
+      - name: order_name
+        description: "Name of the parent order."
+
+      - name: advertiser_name
+        description: "Advertiser / partner name."
+
+      - name: line_item_id
+        description: "Line item identifier for this diagnostics row."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_gam_line_items')
+                field: line_item_id
+
+      - name: line_item_name
+        description: "Human-readable line item name."
+
+      - name: schedule_start_date
+        description: "Line-item schedule start date (from staging)."
+
+      - name: schedule_end_date
+        description: "Line-item schedule end date (from staging)."
+
+      - name: schedule_start_datetime
+        description: "Line-item schedule start timestamp."
+
+      - name: schedule_end_datetime
+        description: "Line-item schedule end timestamp."
+
+      - name: impression_goal_units_raw
+        description: "Raw line-item goal units (typically impressions)."
+
+      - name: impression_goal_unit_type_raw
+        description: "Goal unit type for the line item."
+
+      - name: line_item_total_impressions
+        description: "Lifetime impressions for the line item across all domains."
+
+      - name: line_item_total_clicks
+        description: "Lifetime clicks for the line item across all domains."
+
+      - name: line_item_window_impressions
+        description: "Report-window impressions for the line item."
+
+      - name: line_item_window_clicks
+        description: "Report-window clicks for the line item."
+
+      - name: line_item_ctr
+        description: "CTR at the line-item level (clicks / impressions, fraction 0–1)."
+
+      - name: line_item_delivery_indicator
+        description: "Line item delivery indicator from GAM."
+
+      - name: line_item_priority
+        description: "Priority setting for the line item."
+
+      - name: line_item_type_name
+        description: "Type of line item (e.g. Sponsorship, Standard)."
+
+      - name: order_delivery_status_name
+        description: "Order-level delivery status for this line item."
+
+      - name: creative_name
+        description: "Creative name associated with the line item."
+
+      - name: rendered_creative_size
+        description: "Rendered creative size (e.g. 300x250)."
+
+      - name: device_category_name
+        description: "Device category (e.g. Desktop, Mobile, Tablet)."
+
+      - name: domain_name
+        description: "Domain on which this line item delivered impressions."
+        tests:
+          - not_null
+
+      - name: club_name
+        description: "Mapped club identifier derived from domain_name."
+
+      - name: club_display_name
+        description: "Mapped club display name derived from domain_name."
+
+      - name: domain_impressions
+        description: "Impressions for this (order, line_item, domain_name) combination."
+
+      - name: order_reported_impressions
+        description: "Total delivered impressions for the parent order."
+
+      - name: order_reported_clicks
+        description: "Total delivered clicks for the parent order."
+
+      - name: impression_goal
+        description: "Final order-level impression goal (global)."
+
+      - name: order_schedule_start_date
+        description: "Order schedule start date (for context)."
+
+      - name: order_schedule_end_date
+        description: "Order schedule end date (for context)."
+
+      - name: schedule_days
+        description: "Order-level schedule days (copied from fct_gam_order_health)."
+
+      - name: days_elapsed
+        description: "Days elapsed in the order schedule window (from fct_gam_order_health)."
+
+      - name: schedule_pct_elapsed
+        description: "Fraction of the order schedule elapsed (0–1)."
+
+      - name: actual_impressions_per_day
+        description: "Order-level actual impressions per day."
+
+      - name: target_impressions_per_day
+        description: "Order-level target impressions per day."
+
+      - name: order_pacing_index
+        description: "Order-level pacing index for global health."
+
+      - name: domain_share_of_line_item
+        description: >
+          Fraction of the line item's total impressions that occurred on
+          this domain (domain_impressions / line_item_total_impressions).
+
+      - name: line_item_share_of_order
+        description: >
+          Fraction of the order's total delivered impressions contributed
+          by this line item (line_item_total_impressions / order_reported_impressions).
+
+  # ============================================================
+  # MART: ORDER PACING SUMMARY
+  # ============================================================
+  - name: mart_gam_order_pacing_summary
+    description: "Order-level pacing summary with status classification for dashboards."
+    tags: ['gam', 'order', 'summary']
+
+    columns:
+      - name: order_id
+        description: "Primary identifier for the order."
+        tests:
+          - not_null
+          - unique
+
+      - name: order_name
+        description: "Human-readable name of the order."
+        tests:
+          - not_null
+
+      - name: advertiser_name
+        description: "Advertiser or partner for the order."
+        tests:
+          - not_null
+
+      - name: order_delivery_status_name
+        description: "Order-level delivery status from fct_gam_order_health."
+
+      - name: schedule_start_date
+        description: "Order schedule start date."
+
+      - name: schedule_end_date
+        description: "Order schedule end date."
+
+      - name: schedule_start_datetime
+        description: "Order schedule start timestamp."
+
+      - name: schedule_end_datetime
+        description: "Order schedule end timestamp."
+
+      - name: schedule_days
+        description: "Total scheduled days for the order."
+
+      - name: days_elapsed
+        description: "Days elapsed in the order schedule window."
+
+      - name: schedule_pct_elapsed
+        description: "Fraction of the order schedule elapsed (0–1)."
+
+      - name: impression_goal
+        description: "Final order-level impression goal."
+
+      - name: reported_impressions
+        description: "Delivered impressions in the extraction window."
+        tests:
+          - not_null
+
+      - name: reported_clicks
+        description: "Delivered clicks in the extraction window."
+
+      - name: reported_ctr
+        description: "Delivered CTR in the extraction window."
+
+      - name: delivered_impressions
+        description: "Alias of reported_impressions for dashboard compatibility."
+
+      - name: delivered_clicks
+        description: "Alias of reported_clicks for dashboard compatibility."
+
+      - name: delivered_impressions_pct_of_goal
+        description: "Fraction of impression_goal delivered (0–1)."
+
+      - name: actual_impressions_per_day
+        description: "Average delivered impressions per scheduled day."
+
+      - name: target_impressions_per_day
+        description: "Goal impressions per scheduled day."
+
+      - name: pacing_index
+        description: "Pacing index: delivered vs target rate adjusted for elapsed schedule."
+
+      - name: pacing_status
+        description: "Categorical pacing status bucket for dashboards."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['no_goal', 'too_early', 'unknown', 'behind', 'on_track', 'ahead']
+
+  # ============================================================
+  # MART: CLUB PORTFOLIO
+  # ============================================================
+  - name: mart_gam_club_portfolio
+    description: "Club-level portfolio view with order pacing context and contribution buckets."
+    tags: ['gam', 'club', 'summary']
+
+    columns:
+      - name: club_name
+        description: "Short identifier for the club/site."
+
+      - name: club_display_name
+        description: "Human-readable club/site display name."
+
+      - name: order_id
+        description: "Parent order serving impressions on this club."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_gam_order_health')
+                field: order_id
+
+      - name: order_name
+        description: "Order name (campaign) for this club."
+
+      - name: advertiser_name
+        description: "Advertiser / partner name."
+
+      - name: order_delivery_status_name
+        description: "Order-level delivery status from fct_gam_order_health."
+
+      - name: schedule_start_date
+        description: "Order schedule start date."
+
+      - name: schedule_end_date
+        description: "Order schedule end date."
+
+      - name: schedule_start_datetime
+        description: "Order schedule start timestamp."
+
+      - name: schedule_end_datetime
+        description: "Order schedule end timestamp."
+
+      - name: schedule_days
+        description: "Total scheduled days for the order."
+
+      - name: days_elapsed
+        description: "Days elapsed in the order schedule window."
+
+      - name: schedule_pct_elapsed
+        description: "Fraction of the order schedule elapsed (0–1)."
+
+      - name: impression_goal
+        description: "Final order-level impression goal."
+
+      - name: club_delivered_impressions
+        description: "Impressions from this order that were served on this club."
+
+      - name: order_reported_impressions
+        description: "Total delivered impressions for the order across all clubs."
+
+      - name: club_share_of_order_delivery
+        description: "Share of the order's delivered impressions that were on this club (0–1)."
+
+      - name: order_share_of_club_delivery
+        description: "Share of the club's impressions that came from this order (0–1)."
+
+      - name: order_pacing_index
+        description: "Order-level pacing index for context."
+
+      - name: distinct_line_items_on_club
+        description: "Distinct line items from this order that delivered on this club."
+
+      - name: order_pacing_status
+        description: "Categorical pacing status based on order_pacing_index."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['unknown', 'behind', 'on_track', 'ahead']
+
+      - name: is_ending_soon_order
+        description: "Boolean flag when the order ends within 7 days from today."
+
+      - name: is_urgent_order
+        description: "Boolean flag when ending soon and behind pace."
+
+      - name: club_contribution_bucket
+        description: "Bucketed share of club delivery contributed by this order."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['unknown', 'major_contributor', 'medium_contributor', 'minor_contributor']
+
+  # ============================================================
+  # MART: LINE ITEM DIAGNOSTICS VIEW
+  # ============================================================
+  - name: mart_gam_line_item_diagnostics_view
+    description: "View wrapper on fct_gam_line_item_diagnostics adding pacing/concentration buckets."
+    tags: ['gam', 'line_item', 'diagnostics']
+
+    columns:
+      - name: order_id
+        description: "Parent order identifier for this line item + domain row."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_gam_order_health')
+                field: order_id
+
+      - name: order_name
+        description: "Name of the parent order."
+
+      - name: advertiser_name
+        description: "Advertiser / partner name."
+
+      - name: line_item_id
+        description: "Line item identifier for this diagnostics row."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_gam_line_items')
+                field: line_item_id
+
+      - name: line_item_name
+        description: "Human-readable line item name."
+
+      - name: schedule_start_date
+        description: "Line-item schedule start date (from staging)."
+
+      - name: schedule_end_date
+        description: "Line-item schedule end date (from staging)."
+
+      - name: schedule_start_datetime
+        description: "Line-item schedule start timestamp."
+
+      - name: schedule_end_datetime
+        description: "Line-item schedule end timestamp."
+
+      - name: impression_goal_units_raw
+        description: "Raw line-item goal units (typically impressions)."
+
+      - name: impression_goal_unit_type_raw
+        description: "Goal unit type for the line item."
+
+      - name: line_item_total_impressions
+        description: "Lifetime impressions for the line item across all domains."
+
+      - name: line_item_total_clicks
+        description: "Lifetime clicks for the line item across all domains."
+
+      - name: line_item_window_impressions
+        description: "Report-window impressions for the line item."
+
+      - name: line_item_window_clicks
+        description: "Report-window clicks for the line item."
+
+      - name: line_item_ctr
+        description: "CTR at the line-item level (clicks / impressions, fraction 0–1)."
+
+      - name: line_item_delivery_indicator
+        description: "Line item delivery indicator from GAM."
+
+      - name: line_item_priority
+        description: "Priority setting for the line item."
+
+      - name: line_item_type_name
+        description: "Type of line item (e.g. Sponsorship, Standard)."
+
+      - name: order_delivery_status_name
+        description: "Order-level delivery status for this line item."
+
+      - name: creative_name
+        description: "Creative name associated with the line item."
+
+      - name: rendered_creative_size
+        description: "Rendered creative size (e.g. 300x250)."
+
+      - name: device_category_name
+        description: "Device category (e.g. Desktop, Mobile, Tablet)."
+
+      - name: domain_name
+        description: "Domain on which this line item delivered impressions."
+        tests:
+          - not_null
+
+      - name: club_name
+        description: "Mapped club identifier derived from domain_name."
+
+      - name: club_display_name
+        description: "Mapped club display name derived from domain_name."
+
+      - name: domain_impressions
+        description: "Impressions for this (order, line_item, domain_name) combination."
+
+      - name: order_reported_impressions
+        description: "Total delivered impressions for the parent order."
+
+      - name: order_reported_clicks
+        description: "Total delivered clicks for the parent order."
+
+      - name: impression_goal
+        description: "Final order-level impression goal (global)."
+
+      - name: order_schedule_start_date
+        description: "Order schedule start date (for context)."
+
+      - name: order_schedule_end_date
+        description: "Order schedule end date (for context)."
+
+      - name: schedule_days
+        description: "Order-level schedule days (copied from fct_gam_order_health)."
+
+      - name: days_elapsed
+        description: "Days elapsed in the order schedule window (from fct_gam_order_health)."
+
+      - name: schedule_pct_elapsed
+        description: "Fraction of the order schedule elapsed (0–1)."
+
+      - name: actual_impressions_per_day
+        description: "Order-level actual impressions per day."
+
+      - name: target_impressions_per_day
+        description: "Order-level target impressions per day."
+
+      - name: order_pacing_index
+        description: "Order-level pacing index for global health."
+
+      - name: domain_share_of_line_item
+        description: "Fraction of the line item's total impressions on this domain."
+
+      - name: line_item_share_of_order
+        description: "Fraction of the order's total impressions from this line item."
+
+      - name: order_pacing_status
+        description: "Bucketed pacing status for the parent order."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['unknown', 'behind', 'on_track', 'ahead']
+
+  # ============================================================
+  # FACT: LINE ITEM CREATIVE SIZES
+  # ============================================================
+  - name: fct_gam_line_item_creative_sizes
+    description: >
+      Creative-size delivery breakdown per line item, with share-of-line metrics.
+      Grain: (order_id, line_item_id, rendered_creative_size, device_category_name).
+    tags: ['gam', 'line_item', 'creative_size']
+
+    columns:
+      - name: line_item_id
+        description: "Line item identifier."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_gam_line_items')
+                field: line_item_id
+
+      - name: line_item_name
+        description: "Line item name."
+
+      - name: order_id
+        description: "Parent order identifier."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_gam_orders')
+                field: order_id
+
+      - name: order_name
+        description: "Parent order name."
+
+      - name: advertiser_name
+        description: "Advertiser / partner name."
+
+      - name: order_start_date
+        description: "Earliest order start date across raw rows feeding this line item."
+
+      - name: order_end_date
+        description: "Latest order end date across raw rows feeding this line item."
+
+      - name: order_start_datetime
+        description: "Earliest order start timestamp across raw rows feeding this line item."
+
+      - name: order_end_datetime
+        description: "Latest order end timestamp across raw rows feeding this line item."
+
+      - name: schedule_start_date
+        description: "Line-item schedule start date."
+
+      - name: schedule_end_date
+        description: "Line-item schedule end date."
+
+      - name: schedule_start_datetime
+        description: "Line-item schedule start timestamp."
+
+      - name: schedule_end_datetime
+        description: "Line-item schedule end timestamp."
+
+      - name: line_item_lifetime_impressions
+        description: "Lifetime impressions for the line item."
+
+      - name: line_item_lifetime_clicks
+        description: "Lifetime clicks for the line item."
+
+      - name: line_item_total_impressions
+        description: "Delivered impressions for the line item (report window)."
+
+      - name: line_item_total_clicks
+        description: "Delivered clicks for the line item (report window)."
+
+      - name: line_item_ctr
+        description: "CTR at the line-item level (fraction 0–1)."
+
+      - name: line_item_delivery_indicator
+        description: "Line item delivery indicator."
+
+      - name: line_item_priority
+        description: "Priority setting for the line item."
+
+      - name: line_item_type_name
+        description: "Line item type (e.g. Sponsorship, Standard)."
+
+      - name: order_delivery_status_name
+        description: "Order-level delivery status for this line item."
+
+      - name: rendered_creative_size
+        description: "Rendered creative size bucket (e.g. 300x250)."
+        tests:
+          - not_null
+
+      - name: device_category_name
+        description: "Device category (e.g. Desktop, Mobile, Tablet)."
+
+      - name: creative_size_impressions
+        description: "Impressions delivered for this creative size bucket."
+        tests:
+          - not_null
+
+      - name: creative_size_clicks
+        description: "Clicks delivered for this creative size bucket."
+
+      - name: creative_size_ctr
+        description: "CTR for this creative size bucket (fraction 0–1)."
+
+      - name: creative_size_share_of_line_item
+        description: "Share of the line item's delivered impressions attributed to this creative size (0–1)."
+
+      - name: order_reported_impressions
+        description: "Total delivered impressions for the parent order (from fct_gam_order_health)."
+
+      - name: impression_goal
+        description: "Order-level impression goal."
+
+      - name: order_size_impressions
+        description: "Impressions for this creative size aggregated across the entire order."
+
+      - name: order_size_line_items
+        description: "Distinct line items in the order that use this creative size."
+
+      - name: order_size_avg_impressions_per_line_item
+        description: "Average impressions per line item for this creative size within the order."
+
+      - name: size_share_of_order_delivery
+        description: "Share of the order's delivered impressions attributed to this creative size (0–1)."
+
+      - name: size_pct_of_order_goal
+        description: "Portion of the order's goal delivered by this creative size (0–1)."
+
+  # ============================================================
+  # MART: LINE ITEM CREATIVE SIZES VIEW
+  # ============================================================
+  - name: mart_gam_line_item_creative_sizes_view
+    description: "View wrapper on fct_gam_line_item_creative_sizes."
+    tags: ['gam', 'line_item', 'creative_size']

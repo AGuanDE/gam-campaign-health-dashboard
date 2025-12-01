@@ -1,0 +1,255 @@
+version: 2
+
+models:
+  # ============================================================
+  # STAGING: ORDERS
+  # ============================================================
+  - name: stg_gam_orders
+    description: >
+      Staging model for Google Ad Manager orders.
+      Aggregates raw GAM export (gam_raw) to one row per order_id,
+      computing delivered impressions/clicks and CTR at the order grain.
+    tags: ['gam', 'staging', 'orders']
+
+    columns:
+      - name: order_id
+        description: "Primary key for the order. Maps to ORDER_ID."
+        tests:
+          - not_null
+          - unique
+
+      - name: order_name
+        description: "Human-readable name of the order (campaign)."
+
+      - name: advertiser_name
+        description: "Advertiser associated with the order."
+
+      - name: schedule_start_date
+        description: >
+          Earliest ORDER_START_DATE across all raw rows for this order.
+          Represents the effective start date of the order.
+
+      - name: schedule_end_date
+        description: >
+          Latest ORDER_END_DATE across all raw rows for this order.
+          Represents the effective end date of the order.
+
+      - name: schedule_start_datetime
+        description: >
+          Earliest ORDER_START_DATE_TIME across all raw rows for this order.
+
+      - name: schedule_end_datetime
+        description: >
+          Latest ORDER_END_DATE_TIME across all raw rows for this order.
+
+      - name: lifetime_impressions
+        description: >
+          ORDER_LIFETIME_IMPRESSIONS from GAM, deduplicated via MAX across raw rows.
+          Represents the lifetime impressions at the order level as reported by GAM.
+
+      - name: lifetime_clicks
+        description: >
+          ORDER_LIFETIME_CLICKS from GAM, deduplicated via MAX across raw rows.
+          Represents the lifetime clicks at the order level as reported by GAM.
+
+      - name: impressions
+        description: >
+          Sum of AD_SERVER_IMPRESSIONS across all raw rows for this order.
+          Delivered impressions at the order grain.
+        tests:
+          - not_null
+
+      - name: clicks
+        description: >
+          Sum of AD_SERVER_CLICKS across all raw rows for this order.
+          Delivered clicks at the order grain.
+
+      - name: ctr
+        description: >
+          Delivered click-through rate at the order grain,
+          computed as clicks / impressions * 100.
+
+      - name: order_delivery_status_name
+        description: >
+          ORDER_DELIVERY_STATUS_NAME for this order
+          (e.g. delivering, completed, not started).
+
+  # ============================================================
+  # STAGING: LINE ITEM CREATIVE SIZES
+  # ============================================================
+  - name: stg_gam_line_item_creative_sizes
+    description: >
+      Staging model for per-line-item creative size delivery.
+      Grain: (line_item_id, rendered_creative_size, device_category_name) with
+      impressions/clicks and CTR per size bucket.
+    tags: ['gam', 'staging', 'line_items', 'creative_size']
+
+    columns:
+      - name: line_item_id
+        description: "Line item identifier. Maps to LINE_ITEM_ID."
+        tests:
+          - not_null
+
+      - name: line_item_name
+        description: "Human-readable line item name."
+
+      - name: order_id
+        description: "Order identifier associated with this line item."
+
+      - name: order_name
+        description: "Order name associated with this line item."
+
+      - name: advertiser_name
+        description: "Advertiser associated with this line item."
+
+      - name: order_start_date
+        description: "Earliest order start date across raw rows for this line item."
+
+      - name: order_end_date
+        description: "Latest order end date across raw rows for this line item."
+
+      - name: order_start_datetime
+        description: "Earliest order start timestamp across raw rows for this line item."
+
+      - name: order_end_datetime
+        description: "Latest order end timestamp across raw rows for this line item."
+
+      - name: rendered_creative_size
+        description: "Rendered creative size (e.g. 300x250) for this bucket."
+        tests:
+          - not_null
+
+      - name: device_category_name
+        description: "Device category (e.g. Desktop, Mobile, Tablet)."
+
+      - name: impressions
+        description: "Delivered impressions for this line item + creative size (+ device) bucket."
+        tests:
+          - not_null
+
+      - name: clicks
+        description: "Delivered clicks for this line item + creative size (+ device) bucket."
+
+      - name: ctr
+        description: "Click-through rate for this size bucket (clicks / impressions, fraction 0–1)."
+
+  # ============================================================
+  # STAGING: LINE ITEMS
+  # ============================================================
+  - name: stg_gam_line_items
+    description: >
+      Staging model for Google Ad Manager line items.
+      Aggregates raw GAM export (gam_raw) to one row per line_item_id,
+      computing delivered impressions/clicks and CTR at the line-item grain,
+      and preserving raw (untrusted) goal fields for reference.
+    tags: ['gam', 'staging', 'line_items']
+
+    columns:
+      - name: line_item_id
+        description: "Primary key for the line item. Maps to LINE_ITEM_ID."
+        tests:
+          - not_null
+          - unique
+
+      - name: line_item_name
+        description: "Human-readable name of the line item."
+
+      - name: order_id
+        description: "Order identifier associated with this line item. Maps to ORDER_ID."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_gam_orders')
+                field: order_id
+
+      - name: order_name
+        description: "Human-readable name of the parent order."
+
+      - name: advertiser_name
+        description: "Advertiser associated with this line item."
+
+      - name: schedule_start_date
+        description: >
+          Earliest LINE_ITEM_START_DATE across all raw rows for this line item.
+          Represents the effective start date of the line item.
+
+      - name: schedule_end_date
+        description: >
+          Latest LINE_ITEM_END_DATE across all raw rows for this line item.
+          Represents the effective end date of the line item.
+
+      - name: schedule_start_datetime
+        description: >
+          Earliest LINE_ITEM_START_DATE_TIME across all raw rows for this line item.
+
+      - name: schedule_end_datetime
+        description: >
+          Latest LINE_ITEM_END_DATE_TIME across all raw rows for this line item.
+
+      - name: impression_goal_units_raw
+        description: >
+          Raw line item goal units from LINE_ITEM_PRIMARY_GOAL_UNITS_ABSOLUTE.
+          These values are not fully trusted and will be replaced by seed-based goals
+          in downstream models, but are kept for comparison and debugging.
+
+      - name: impression_goal_unit_type_raw
+        description: >
+          Unit type for the raw line item goal (e.g. IMPRESSIONS) from
+          LINE_ITEM_PRIMARY_GOAL_UNIT_TYPE_NAME.
+
+      - name: lifetime_impressions
+        description: >
+          LINE_ITEM_LIFETIME_IMPRESSIONS from GAM, deduplicated via MAX across raw rows.
+          Represents lifetime impressions at the line-item level as reported by GAM.
+
+      - name: lifetime_clicks
+        description: >
+          LINE_ITEM_LIFETIME_CLICKS from GAM, deduplicated via MAX across raw rows.
+          Represents lifetime clicks at the line-item level as reported by GAM.
+
+      - name: impressions
+        description: >
+          Sum of AD_SERVER_IMPRESSIONS across all raw rows for this line item.
+          Delivered impressions at the line-item grain.
+        tests:
+          - not_null
+
+      - name: clicks
+        description: >
+          Sum of AD_SERVER_CLICKS across all raw rows for this line item.
+          Delivered clicks at the line-item grain.
+
+      - name: ctr
+        description: >
+          Delivered click-through rate at the line-item grain,
+          computed as clicks / impressions (fraction 0–1).
+
+      - name: line_item_delivery_indicator
+        description: >
+          LINE_ITEM_DELIVERY_INDICATOR for this line item.
+          Numeric indicator/score of delivery progress.
+
+      - name: line_item_priority
+        description: "LINE_ITEM_PRIORITY for this line item (numeric priority in GAM)."
+
+      - name: line_item_type_name
+        description: "LINE_ITEM_TYPE_NAME (e.g. STANDARD, SPONSORSHIP)."
+
+      - name: order_delivery_status_name
+        description: >
+          ORDER_DELIVERY_STATUS_NAME for the parent order,
+          propagated to the line-item grain.
+
+      - name: creative_name
+        description: >
+          CREATIVE_NAME sampled via MAX() for this line item. A line item can have many
+          creatives; this captures a representative value.
+
+      - name: rendered_creative_size
+        description: >
+          RENDERED_CREATIVE_SIZE sampled via MAX() for this line item (e.g. 300x250).
+
+      - name: device_category_name
+        description: >
+          DEVICE_CATEGORY_NAME sampled via MAX() for this line item (e.g. Desktop, Mobile).

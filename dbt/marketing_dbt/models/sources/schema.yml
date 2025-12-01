@@ -1,0 +1,197 @@
+version: 2
+
+sources:
+  - name: gam
+    description: >
+      Google Ad Manager raw report data stored in the Postgres schema "schema".
+      This table is a direct landing of the CSV export, one row per report line.
+    database: "{{ env_var('POSTGRES_DB') }}"
+    schema: schema
+
+    tables:
+      - name: gam_raw
+        description: >
+          Raw Google Ad Manager export as landed from CSV.
+          One row per report record (order + line item + creative + device).
+        columns:
+          # ===========================
+          # Order identifiers & dates
+          # ===========================
+          - name: order_id
+            description: "Maps to ORDER_ID. Identifier for the order."
+            tests:
+              - not_null
+
+          - name: order_name
+            description: "Maps to ORDER_NAME. Human-readable name of the order (campaign)."
+
+          - name: order_start_date
+            description: "Maps to ORDER_START_DATE (string from GAM). Start date of the order."
+
+          - name: order_start_date_time
+            description: "Maps to ORDER_START_DATE_TIME (string from GAM). Start timestamp of the order."
+
+          - name: order_end_date
+            description: "Maps to ORDER_END_DATE (string from GAM). End date of the order."
+
+          - name: order_end_date_time
+            description: "Maps to ORDER_END_DATE_TIME (string from GAM). End timestamp of the order."
+
+          # ===========================
+          # Line item identifiers & dates
+          # ===========================
+          - name: line_item_id
+            description: "Maps to LINE_ITEM_ID. Identifier for the line item."
+            tests:
+              - not_null
+
+          - name: line_item_name
+            description: "Maps to LINE_ITEM_NAME. Human-readable line item name."
+
+          - name: line_item_start_date
+            description: "Maps to LINE_ITEM_START_DATE (string from GAM). Start date of the line item."
+
+          - name: line_item_start_date_time
+            description: "Maps to LINE_ITEM_START_DATE_TIME (string from GAM). Start timestamp of the line item."
+
+          - name: line_item_end_date
+            description: "Maps to LINE_ITEM_END_DATE (string from GAM). End date of the line item."
+
+          - name: line_item_end_date_time
+            description: "Maps to LINE_ITEM_END_DATE_TIME (string from GAM). End timestamp of the line item."
+
+          # ===========================
+          # Line item goals & lifetime metrics
+          # ===========================
+          - name: line_item_primary_goal_units_absolute
+            description: >
+              Line item goal in absolute units.
+              This IS NOT the true goal. It is sometimes used to boost impressions.
+
+          - name: line_item_primary_goal_unit_type_name
+            description: >
+              Maps to LINE_ITEM_PRIMARY_GOAL_UNIT_TYPE_NAME.
+              Unit type for the line item goal (e.g. IMPRESSIONS).
+
+          - name: line_item_lifetime_impressions
+            description: >
+              Maps to LINE_ITEM_LIFETIME_IMPRESSIONS.
+              Lifetime impressions reported by GAM at the line item level.
+
+          - name: line_item_lifetime_clicks
+            description: >
+              Maps to LINE_ITEM_LIFETIME_CLICKS.
+              Lifetime clicks reported by GAM at the line item level.
+
+          # ===========================
+          # Order lifetime metrics
+          # ===========================
+          - name: order_lifetime_clicks
+            description: >
+              Maps to ORDER_LIFETIME_CLICKS.
+              Lifetime clicks reported by GAM at the order level.
+
+          - name: order_lifetime_impressions
+            description: >
+              Maps to ORDER_LIFETIME_IMPRESSIONS.
+              Lifetime impressions reported by GAM at the order level.
+
+          # ===========================
+          # Delivery / config fields
+          # ===========================
+          - name: line_item_delivery_indicator
+            description: >
+              Maps to LINE_ITEM_DELIVERY_INDICATOR.
+              Numeric indicator/score of delivery progress for this line item.
+
+          - name: line_item_priority
+            description: "Maps to LINE_ITEM_PRIORITY. Numeric priority as configured in GAM."
+
+          - name: line_item_type_name
+            description: "Maps to LINE_ITEM_TYPE_NAME (e.g. STANDARD, SPONSORSHIP)."
+
+          - name: order_delivery_status_name
+            description: "Maps to ORDER_DELIVERY_STATUS_NAME. High-level delivery status for the order."
+
+          - name: advertiser_name
+            description: "Maps to ADVERTISER_NAME. Advertiser associated with the order/line item."
+
+          # ===========================
+          # Creative / device breakdown
+          # ===========================
+          - name: creative_name
+            description: "Maps to CREATIVE_NAME. Name/label of the creative served."
+
+          - name: rendered_creative_size
+            description: "Maps to RENDERED_CREATIVE_SIZE. Size of the rendered creative (e.g. 300x250)."
+
+          - name: device_category_name
+            description: "Maps to DEVICE_CATEGORY_NAME (e.g. Desktop, Mobile, Tablet)."
+
+          # ===========================
+          # Delivered metrics (AD_SERVER_*)
+          # ===========================
+          - name: ad_server_impressions
+            description: >
+              Maps to AD_SERVER_IMPRESSIONS.
+              Number of ad server impressions for this row (order + line item + creative + device).
+
+          - name: ad_server_clicks
+            description: >
+              Maps to AD_SERVER_CLICKS.
+              Number of ad server clicks for this row.
+
+          - name: ad_server_ctr
+            description: >
+              Maps to AD_SERVER_CTR.
+              Click-through rate (clicks / impressions) as reported by the ad server for this row.
+
+          - name: row_hash
+            description: >
+              Deterministic hash over the raw row used for idempotent upserts.
+            tests:
+              - unique
+              - not_null
+
+      # =====================================================
+      # New source table: gam_domain_mapping
+      # =====================================================
+      - name: gam_domain_mapping
+        description: >
+          Domain-level mapping for Google Ad Manager delivery.
+          One row per (order, line item, domain) with associated advertiser and
+          ad server impressions. Used to map domains to soccer clubs and
+          support club-level campaign health views.
+        columns:
+          - name: order_id
+            description: "Order identifier (matches ORDER_ID in GAM and gam_raw)."
+            tests:
+              - not_null
+
+          - name: order_name
+            description: "Human-readable order / campaign name (matches ORDER_NAME in GAM)."
+
+          - name: line_item_id
+            description: "Line item identifier (matches LINE_ITEM_ID in GAM and gam_raw)."
+            tests:
+              - not_null
+
+          - name: line_item_name
+            description: "Human-readable line item name (matches LINE_ITEM_NAME in GAM)."
+
+          - name: advertiser_name
+            description: "Advertiser / partner name as it appears in ADVERTISER_NAME."
+            tests:
+              - not_null
+
+          - name: domain_name
+            description: >
+              Top private domain associated with the impression
+              (e.g. sportsleague.ca, teamrabbit.com, teamlion.com).
+            tests:
+              - not_null
+
+          - name: ad_server_impressions
+            description: >
+              Number of ad server impressions attributed to this
+              (order, line item, domain_name) combination.
