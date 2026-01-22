@@ -37,23 +37,23 @@ The marketing agency must deliver contracted impression targets to multiple adve
 
 ## Streamlit Dashboard
 
-- **Filters and ingestion**: Sidebar filters by advertiser, pacing status, delivery status, and schedule dates; one-click ingestion runs the latest `gam_report_*.csv` into Postgres.  
-  ![Sidebar Filters](docs/images/dashboard-filters.png)
+**Advertiser view**: 
+- impressions vs goal by advertiser
+  ![Advertiser delivery view](docs/images/1_dashboard_goals.png)
+- order pacing bars with goal markers
+  ![Advertiser pacing view](docs/images/1_orders_pace.png)
 
-- **Advertiser view**: Portfolio KPIs (behind/on-track/ahead/urgent), impressions vs goal by advertiser, and order pacing bars with goal markers; drill into line-item diagnostics for any order.  
-  ![Advertiser delivery view](docs/images/dashboard-advertiser.png)
-  ![Advertiser pacing view](docs/images/dashboard-advertiser-pace.png)
-  ![Advertiser details view](docs/images/dashboard-advertiser-details.png)
-
-- **Club portfolio view**: Club health overview with pacing mix vs delivery scale toggle, optional urgent-only filter, bottom-5/top-3 pacing spotlight, and order share of club delivery to spot concentration risk.  
-  ![Club Portfolio view](docs/images/dashboard-club-overview.png)
-  ![Club Portfolio spotlight and details](docs/images/dashboard-club-spotlight-details.png)
+**Club portfolio view**: 
+- Club health overview with pacing mix vs delivery scale toggle
+  ![Club Portfolio view](docs/images/2_club_health_overview.png)
+- bottom-5/top-3 pacing spotlight
+  ![Club Portfolio spotlight and details](docs/images/2_spotlight.png)
 
 - **Creative sizes view**: Share of impressions by rendered creative size with optional order/line-item/device filters, plus goal context when a single order is selected.  
-  ![Creative size view](docs/images/dashboard-creative-details.png)
+  ![Creative size view](docs/images/3_creative_size.png)
 
 - **Goals tab**: In-app editor for `seed_partner_names_goals.csv`, then runs `dbt seed` and `dbt run` to refresh goals and marts.  
-  ![Goals tab](docs/images/dashboard-goals.png)
+  ![Goals tab](docs/images/4_goals.png)
 
 ## Data Flow
 
