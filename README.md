@@ -1,7 +1,7 @@
 # Google Ad Campaign Health Dashboard
 
 ## About
-This project creates a data pipeline that visualizes ad campaign health to help a marketing agency make ad delivery decisions. It ingests Google Ad Manager (GAM) exports into Postgres, models pacing and health, and visualizes where delivery is ahead/behind.
+This project (anonymized!) creates a data pipeline that visualizes ad campaign health to help a marketing agency make ad delivery decisions. It ingests Google Ad Manager (GAM) exports into Postgres, models pacing and health, and visualizes where delivery is ahead/behind.
 
 
 ## Problem Statement
